@@ -78,6 +78,12 @@ impl Application {
         Ok(())
     }
 
+    pub fn draw(&mut self) -> anyhow::Result<()> {
+        self.output.flush()?;
+
+        Ok(())
+    }
+
     pub async fn run(&mut self) -> anyhow::Result<()> {
         terminal::enable_raw_mode()?;
 
@@ -88,7 +94,8 @@ impl Application {
         self.output.queue(cursor::MoveTo(0, 0))?;
 
         loop {
-            self.output.flush()?;
+            self.draw()?;
+
             let event = event::read()?;
 
             if let Some(action) = handle_event(&mut self.output, &event, &self.mode)? {
