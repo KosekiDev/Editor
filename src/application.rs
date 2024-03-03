@@ -1,4 +1,4 @@
-use crate::events::handle_event;
+use crate::{buffer::Buffer, events::handle_event};
 use crossterm::{cursor, event, queue, style, terminal, ExecutableCommand, QueueableCommand};
 use std::io::{Stdout, Write};
 
@@ -28,13 +28,15 @@ pub enum Mode {
 pub struct Application {
     mode: Mode,
     output: Stdout,
+    buffers: Vec<Buffer>,
 }
 
 impl Application {
-    pub fn new(output: Stdout, default_mode: Mode) -> Self {
+    pub fn new(output: Stdout, default_mode: Mode, buffers: Vec<Buffer>) -> Self {
         Self {
             mode: default_mode,
             output,
+            buffers,
         }
     }
 
@@ -78,7 +80,27 @@ impl Application {
         Ok(())
     }
 
+    pub fn draw_buffer(&mut self, buffer_index: usize) -> anyhow::Result<()> {
+        self.output.queue(cursor::SavePosition)?;
+
+        let buffer_index = if buffer_index >= self.buffers.len() {
+            0
+        } else {
+            buffer_index
+        };
+        for (index, line) in self.buffers[buffer_index].lines.iter().enumerate() {
+            self.output.queue(cursor::MoveTo(0, index as u16))?;
+            self.output.queue(style::Print(line))?;
+            self.output.queue(cursor::MoveToNextLine(1))?;
+        }
+
+        self.output.queue(cursor::RestorePosition)?;
+
+        Ok(())
+    }
+
     pub fn draw(&mut self) -> anyhow::Result<()> {
+        self.draw_buffer(0)?;
         self.output.flush()?;
 
         Ok(())
@@ -106,6 +128,7 @@ impl Application {
             }
         }
 
+        self.output.flush()?;
         self.output.execute(terminal::LeaveAlternateScreen)?;
 
         terminal::disable_raw_mode()?;
@@ -134,7 +157,7 @@ mod tests {
 
     #[test]
     fn it_should_quit_application() {
-        let mut app = Application::new(stdout(), Mode::Normal);
+        let mut app = Application::new(stdout(), Mode::Normal, vec![Buffer::new(None)]);
 
         let action = handle_event(&mut app.output, &key_press_event('q'), &Mode::Normal)
             .expect("Error when handling events");
@@ -144,7 +167,7 @@ mod tests {
 
     #[test]
     fn it_should_switch_to_insert_mode() {
-        let mut app = Application::new(stdout(), Mode::Normal);
+        let mut app = Application::new(stdout(), Mode::Normal, vec![Buffer::new(None)]);
 
         assert_eq!(app.mode, Mode::Normal);
 
@@ -157,7 +180,7 @@ mod tests {
 
     #[test]
     fn it_should_switch_from_insert_to_normal_mode() {
-        let mut app = Application::new(stdout(), Mode::Insert);
+        let mut app = Application::new(stdout(), Mode::Insert, vec![Buffer::new(None)]);
 
         assert_eq!(app.mode, Mode::Insert);
 
