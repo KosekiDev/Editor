@@ -31,7 +31,7 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn init(output: Stdout, default_mode: Mode) -> Self {
+    pub fn new(output: Stdout, default_mode: Mode) -> Self {
         Self {
             mode: default_mode,
             output,
@@ -127,7 +127,7 @@ mod tests {
 
     #[test]
     fn it_should_quit_application() {
-        let mut app = Application::init(stdout(), Mode::Normal);
+        let mut app = Application::new(stdout(), Mode::Normal);
 
         let action = handle_event(&mut app.output, &key_press_event('q'), &Mode::Normal)
             .expect("Error when handling events");
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn it_should_switch_to_insert_mode() {
-        let mut app = Application::init(stdout(), Mode::Normal);
+        let mut app = Application::new(stdout(), Mode::Normal);
 
         assert_eq!(app.mode, Mode::Normal);
 
@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn it_should_switch_from_insert_to_normal_mode() {
-        let mut app = Application::init(stdout(), Mode::Insert);
+        let mut app = Application::new(stdout(), Mode::Insert);
 
         assert_eq!(app.mode, Mode::Insert);
 

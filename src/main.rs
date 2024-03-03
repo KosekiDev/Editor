@@ -6,7 +6,7 @@ use application::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let mut application = Application::init(stdout(), Mode::Normal);
+    let mut application = Application::new(stdout(), Mode::Normal);
 
     application.run().await
 }
