@@ -50,7 +50,8 @@ impl Application {
         let current_column = cursor::position()?.0;
         let current_viewport = &mut self.viewports[self.current_viewport];
         let current_buffer_id = current_viewport.buffer_id;
-        let lines = &mut self.buffers[current_buffer_id].lines;
+        let current_buffer = &mut self.buffers[current_buffer_id];
+        let lines = &mut current_buffer.lines;
 
         match action {
             Action::Write(char) => {
@@ -71,11 +72,29 @@ impl Application {
                     )?;
 
                     current_viewport.move_cursor_column_to(current_column.saturating_sub(1));
+                } else if current_row > 0 {
+                    let line = lines[current_row as usize].clone();
+                    let previous_line_len = lines[current_row as usize - 1].len();
+
+                    lines[current_row as usize - 1] += &line;
+                    lines.remove(current_row as usize);
+
+                    current_viewport
+                        .move_cursor_to(previous_line_len as u16, current_row.saturating_sub(1));
                 }
             }
             Action::Return => {
+                let current_line = lines[current_row as usize].clone();
+                let (line_left_side, line_right_side) =
+                    current_line.split_at(current_column as usize);
+
+                lines[current_row as usize] = line_left_side.to_string();
+
                 current_viewport.move_cursor_to(0, current_row.saturating_add(1));
-                lines.insert((current_row as usize).saturating_add(1), "".to_owned());
+                lines.insert(
+                    (current_row as usize).saturating_add(1),
+                    line_right_side.to_string(),
+                );
             }
 
             Action::MoveLeft => {
@@ -119,13 +138,22 @@ impl Application {
             0
         };
 
+        let fill_line_with_spaces = |s: &str, len: usize| -> String {
+            let mut str = s.to_string();
+
+            for _ in str.len()..len {
+                str += " ";
+            }
+
+            str
+        };
+
         for (index, line) in current_buffer.lines[start_rows..].iter().enumerate() {
             self.output.queue(cursor::MoveTo(0, index as u16))?;
-            if line.len() > start_column {
-                self.output.queue(style::Print(&line[start_column..]))?;
-            } else {
-                style::Print("         ");
-            }
+            self.output.queue(style::Print(fill_line_with_spaces(
+                &line[start_column..].to_string(),
+                current_viewport.width as usize,
+            )))?;
             self.output.queue(cursor::MoveToNextLine(1))?;
         }
 
