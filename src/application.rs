@@ -149,6 +149,10 @@ impl Application {
         };
 
         for (index, line) in current_buffer.lines[start_rows..].iter().enumerate() {
+            if index as u16 >= current_viewport.height {
+                break;
+            }
+
             self.output.queue(cursor::MoveTo(0, index as u16))?;
             self.output.queue(style::Print(fill_line_with_spaces(
                 &line[start_column..].to_string(),
