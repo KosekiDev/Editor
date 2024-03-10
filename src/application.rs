@@ -46,25 +46,22 @@ impl Application {
     pub fn handle_action(&mut self, action: Action) -> anyhow::Result<()> {
         let current_row = cursor::position()?.1;
         let current_column = cursor::position()?.0;
+        let lines = &mut self.buffers[self.current_buffer].lines;
 
         match action {
             Action::Write(char) => {
-                self.buffers[self.current_buffer].lines[current_row as usize]
-                    .insert(current_column as usize, char);
+                lines[current_row as usize].insert(current_column as usize, char);
 
                 self.output.queue(cursor::MoveRight(1))?;
             }
             Action::Back => {
                 if current_column > 0 {
-                    self.buffers[self.current_buffer].lines[current_row as usize]
-                        .remove(current_column as usize - 1);
+                    lines[current_row as usize].remove(current_column as usize - 1);
+
                     queue!(
                         self.output,
                         cursor::SavePosition,
-                        cursor::MoveToColumn(
-                            self.buffers[self.current_buffer].lines[current_row as usize].len()
-                                as u16
-                        ),
+                        cursor::MoveToColumn(lines[current_row as usize].len() as u16),
                         style::Print(' '),
                         cursor::RestorePosition,
                         cursor::MoveLeft(1)
@@ -73,14 +70,15 @@ impl Application {
             }
             Action::Return => {
                 self.output.queue(cursor::MoveToNextLine(1))?;
-                self.buffers[self.current_buffer].lines.push("".to_string());
+                lines.push("".to_string());
             }
 
             Action::MoveLeft => {
                 self.output.queue(cursor::MoveLeft(1))?;
             }
             Action::MoveRight => {
-                let line_len = self.buffers[self.current_buffer].lines[current_row as usize].len();
+                let line_len = lines[current_row as usize].len();
+
                 if (current_column as usize) < line_len {
                     self.output.queue(cursor::MoveRight(1))?;
                 } else {
@@ -91,7 +89,8 @@ impl Application {
                 self.output.queue(cursor::MoveUp(1))?;
             }
             Action::MoveDown => {
-                let lines_count = self.buffers[self.current_buffer].lines.len();
+                let lines_count = lines.len();
+
                 if (current_row as usize) < lines_count - 1 {
                     self.output.queue(cursor::MoveDown(1))?;
                 }
