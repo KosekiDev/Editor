@@ -29,8 +29,8 @@ pub struct Application {
     mode: Mode,
     output: Stdout,
     buffers: Vec<Buffer>,
-    current_viewport: usize,
     viewports: Vec<Viewport>,
+    current_viewport: usize,
 }
 
 impl Application {
@@ -48,18 +48,19 @@ impl Application {
     pub fn handle_action(&mut self, action: Action) -> anyhow::Result<()> {
         let current_row = cursor::position()?.1;
         let current_column = cursor::position()?.0;
-        let current_buffer_id = self.viewports[self.current_viewport].buffer_id;
+        let current_viewport = &mut self.viewports[self.current_viewport];
+        let current_buffer_id = current_viewport.buffer_id;
         let lines = &mut self.buffers[current_buffer_id].lines;
 
         match action {
             Action::Write(char) => {
                 lines[current_row as usize].insert(current_column as usize, char);
 
-                self.output.queue(cursor::MoveRight(1))?;
+                current_viewport.move_cursor_column_to(current_column.saturating_add(1));
             }
             Action::Back => {
                 if current_column > 0 {
-                    lines[current_row as usize].remove(current_column as usize - 1);
+                    lines[current_row as usize].remove((current_column as usize).saturating_sub(1));
 
                     queue!(
                         self.output,
@@ -67,35 +68,30 @@ impl Application {
                         cursor::MoveToColumn(lines[current_row as usize].len() as u16),
                         style::Print(' '),
                         cursor::RestorePosition,
-                        cursor::MoveLeft(1)
                     )?;
+
+                    current_viewport.move_cursor_column_to(current_column.saturating_sub(1));
                 }
             }
             Action::Return => {
-                self.output.queue(cursor::MoveToNextLine(1))?;
-                lines.push("".to_string());
+                current_viewport.move_cursor_to(0, current_row.saturating_add(1));
+                lines.insert((current_row as usize).saturating_add(1), "".to_owned());
             }
 
             Action::MoveLeft => {
-                self.output.queue(cursor::MoveLeft(1))?;
+                current_viewport.move_cursor_column_to(current_column.saturating_sub(1));
             }
             Action::MoveRight => {
-                let line_len = lines[current_row as usize].len();
-
-                if (current_column as usize) < line_len {
-                    self.output.queue(cursor::MoveRight(1))?;
-                } else {
-                    self.output.queue(cursor::MoveToColumn(line_len as u16))?;
-                }
+                current_viewport.move_cursor_column_to(current_column.saturating_add(1));
             }
             Action::MoveUp => {
-                self.output.queue(cursor::MoveUp(1))?;
+                current_viewport.move_cursor_row_to(current_row.saturating_sub(1));
             }
             Action::MoveDown => {
                 let lines_count = lines.len();
 
-                if (current_row as usize) < lines_count - 1 {
-                    self.output.queue(cursor::MoveDown(1))?;
+                if (current_row as usize) < lines_count.saturating_sub(1) {
+                    current_viewport.move_cursor_row_to(current_row.saturating_add(1));
                 }
             }
 
@@ -145,6 +141,24 @@ impl Application {
         Ok(())
     }
 
+    fn init_cursor_position(&mut self) -> anyhow::Result<()> {
+        let current_viewport = &mut self.viewports[self.current_viewport];
+        let current_buffer = &mut self.buffers[current_viewport.buffer_id];
+
+        let current_line_len = current_buffer.lines[current_viewport.cursor_y as usize].len();
+
+        let cursor_column = if current_viewport.cursor_x >= current_line_len as u16 {
+            current_line_len as u16
+        } else {
+            current_viewport.cursor_x
+        };
+
+        self.output
+            .queue(cursor::MoveTo(cursor_column, current_viewport.cursor_y))?;
+
+        Ok(())
+    }
+
     pub async fn run(&mut self) -> anyhow::Result<()> {
         terminal::enable_raw_mode()?;
 
@@ -152,9 +166,8 @@ impl Application {
         self.output
             .execute(terminal::Clear(terminal::ClearType::All))?;
 
-        self.output.queue(cursor::MoveTo(0, 0))?;
-
         loop {
+            self.init_cursor_position()?;
             self.draw()?;
 
             let event = event::read()?;
