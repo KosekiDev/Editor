@@ -1,6 +1,9 @@
+use crate::viewport::Viewport;
+
 pub struct Buffer {
     path: Option<String>,
     pub lines: Vec<String>,
+    pub viewport: Viewport,
 }
 
 impl Buffer {
@@ -11,9 +14,13 @@ impl Buffer {
                 .lines()
                 .map(|line| line.to_owned())
                 .collect(),
-            None => vec![],
+            None => vec!["".to_string()],
         };
 
-        Self { path, lines }
+        Self {
+            path,
+            lines,
+            viewport: Viewport::new(),
+        }
     }
 }

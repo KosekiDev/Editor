@@ -29,6 +29,7 @@ pub struct Application {
     mode: Mode,
     output: Stdout,
     buffers: Vec<Buffer>,
+    current_buffer: usize,
 }
 
 impl Application {
@@ -37,37 +38,63 @@ impl Application {
             mode: default_mode,
             output,
             buffers,
+
+            current_buffer: 0,
         }
     }
 
     pub fn handle_action(&mut self, action: Action) -> anyhow::Result<()> {
+        let current_row = cursor::position()?.1;
+        let current_column = cursor::position()?.0;
+
         match action {
             Action::Write(char) => {
-                self.output.queue(style::Print(char))?;
+                self.buffers[self.current_buffer].lines[current_row as usize]
+                    .insert(current_column as usize, char);
+
+                self.output.queue(cursor::MoveRight(1))?;
             }
             Action::Back => {
-                queue!(
-                    self.output,
-                    cursor::MoveLeft(1),
-                    style::Print(' '),
-                    cursor::MoveLeft(1)
-                )?;
+                if current_column > 0 {
+                    self.buffers[self.current_buffer].lines[current_row as usize]
+                        .remove(current_column as usize - 1);
+                    queue!(
+                        self.output,
+                        cursor::SavePosition,
+                        cursor::MoveToColumn(
+                            self.buffers[self.current_buffer].lines[current_row as usize].len()
+                                as u16
+                        ),
+                        style::Print(' '),
+                        cursor::RestorePosition,
+                        cursor::MoveLeft(1)
+                    )?;
+                }
             }
             Action::Return => {
                 self.output.queue(cursor::MoveToNextLine(1))?;
+                self.buffers[self.current_buffer].lines.push("".to_string());
             }
 
             Action::MoveLeft => {
                 self.output.queue(cursor::MoveLeft(1))?;
             }
             Action::MoveRight => {
-                self.output.queue(cursor::MoveRight(1))?;
+                let line_len = self.buffers[self.current_buffer].lines[current_row as usize].len();
+                if (current_column as usize) < line_len {
+                    self.output.queue(cursor::MoveRight(1))?;
+                } else {
+                    self.output.queue(cursor::MoveToColumn(line_len as u16))?;
+                }
             }
             Action::MoveUp => {
                 self.output.queue(cursor::MoveUp(1))?;
             }
             Action::MoveDown => {
-                self.output.queue(cursor::MoveDown(1))?;
+                let lines_count = self.buffers[self.current_buffer].lines.len();
+                if (current_row as usize) < lines_count - 1 {
+                    self.output.queue(cursor::MoveDown(1))?;
+                }
             }
 
             Action::ChangeMode(mode) => {
@@ -80,17 +107,32 @@ impl Application {
         Ok(())
     }
 
-    pub fn draw_buffer(&mut self, buffer_index: usize) -> anyhow::Result<()> {
+    pub fn draw_buffer(&mut self) -> anyhow::Result<()> {
         self.output.queue(cursor::SavePosition)?;
 
-        let buffer_index = if buffer_index >= self.buffers.len() {
-            0
+        self.buffers[self.current_buffer]
+            .viewport
+            .resize(terminal::size()?.0, terminal::size()?.1);
+
+        let start_column = self.buffers[self.current_buffer].viewport.start_column as usize;
+        let start_rows = if self.buffers[self.current_buffer].lines.len()
+            > self.buffers[self.current_buffer].viewport.start_rows as usize
+        {
+            self.buffers[self.current_buffer].viewport.start_rows as usize
         } else {
-            buffer_index
+            0
         };
-        for (index, line) in self.buffers[buffer_index].lines.iter().enumerate() {
+
+        for (index, line) in self.buffers[self.current_buffer].lines[start_rows..]
+            .iter()
+            .enumerate()
+        {
             self.output.queue(cursor::MoveTo(0, index as u16))?;
-            self.output.queue(style::Print(line))?;
+            if line.len() > start_column {
+                self.output.queue(style::Print(&line[start_column..]))?;
+            } else {
+                style::Print("         ");
+            }
             self.output.queue(cursor::MoveToNextLine(1))?;
         }
 
@@ -100,7 +142,7 @@ impl Application {
     }
 
     pub fn draw(&mut self) -> anyhow::Result<()> {
-        self.draw_buffer(0)?;
+        self.draw_buffer()?;
         self.output.flush()?;
 
         Ok(())
