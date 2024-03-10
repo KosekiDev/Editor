@@ -124,6 +124,16 @@ impl Application {
         Ok(())
     }
 
+    fn fill_string_with_spaces(s: &str, len: usize) -> String {
+        let mut str = s.to_string();
+
+        for _ in str.len()..len {
+            str += " ";
+        }
+
+        str
+    }
+
     pub fn draw_buffer(&mut self) -> anyhow::Result<()> {
         self.output.queue(cursor::SavePosition)?;
 
@@ -138,24 +148,14 @@ impl Application {
             0
         };
 
-        let fill_line_with_spaces = |s: &str, len: usize| -> String {
-            let mut str = s.to_string();
-
-            for _ in str.len()..len {
-                str += " ";
-            }
-
-            str
-        };
-
         for index in 0..current_viewport.height {
             let line = if index as usize + start_rows < current_buffer.lines.len() as usize {
-                fill_line_with_spaces(
+                Application::fill_string_with_spaces(
                     &current_buffer.lines[index as usize + start_rows][start_column..],
                     current_viewport.width as usize,
                 )
             } else {
-                fill_line_with_spaces("", current_viewport.width as usize)
+                Application::fill_string_with_spaces("", current_viewport.width as usize)
             };
 
             self.output.queue(cursor::MoveTo(0, index as u16))?;
