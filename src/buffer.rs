@@ -1,9 +1,7 @@
-use crate::viewport::Viewport;
-
+#![allow(dead_code)]
 pub struct Buffer {
     path: Option<String>,
     pub lines: Vec<String>,
-    pub viewport: Viewport,
 }
 
 impl Buffer {
@@ -17,10 +15,6 @@ impl Buffer {
             None => vec!["".to_string()],
         };
 
-        Self {
-            path,
-            lines,
-            viewport: Viewport::new(),
-        }
+        Self { path, lines }
     }
 }

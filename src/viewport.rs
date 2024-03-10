@@ -3,6 +3,11 @@ pub struct Viewport {
     pub height: u16,
     pub start_column: u16,
     pub start_rows: u16,
+
+    pub cursor_x: u16,
+    pub cursor_y: u16,
+
+    pub buffer_id: usize,
 }
 
 impl Viewport {
@@ -12,6 +17,11 @@ impl Viewport {
             height: 0,
             start_column: 0,
             start_rows: 10000,
+
+            cursor_x: 0,
+            cursor_y: 0,
+
+            buffer_id: 0,
         }
     }
 

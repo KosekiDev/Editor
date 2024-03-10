@@ -1,4 +1,4 @@
-use crate::{buffer::Buffer, events::handle_event};
+use crate::{buffer::Buffer, events::handle_event, viewport::Viewport};
 use crossterm::{cursor, event, queue, style, terminal, ExecutableCommand, QueueableCommand};
 use std::io::{Stdout, Write};
 
@@ -29,7 +29,8 @@ pub struct Application {
     mode: Mode,
     output: Stdout,
     buffers: Vec<Buffer>,
-    current_buffer: usize,
+    current_viewport: usize,
+    viewports: Vec<Viewport>,
 }
 
 impl Application {
@@ -39,14 +40,16 @@ impl Application {
             output,
             buffers,
 
-            current_buffer: 0,
+            current_viewport: 0,
+            viewports: vec![Viewport::new()],
         }
     }
 
     pub fn handle_action(&mut self, action: Action) -> anyhow::Result<()> {
         let current_row = cursor::position()?.1;
         let current_column = cursor::position()?.0;
-        let lines = &mut self.buffers[self.current_buffer].lines;
+        let current_buffer_id = self.viewports[self.current_viewport].buffer_id;
+        let lines = &mut self.buffers[current_buffer_id].lines;
 
         match action {
             Action::Write(char) => {
@@ -109,23 +112,18 @@ impl Application {
     pub fn draw_buffer(&mut self) -> anyhow::Result<()> {
         self.output.queue(cursor::SavePosition)?;
 
-        self.buffers[self.current_buffer]
-            .viewport
-            .resize(terminal::size()?.0, terminal::size()?.1);
+        let current_viewport = &mut self.viewports[self.current_viewport];
+        current_viewport.resize(terminal::size()?.0, terminal::size()?.1);
+        let current_buffer = &mut self.buffers[current_viewport.buffer_id];
 
-        let start_column = self.buffers[self.current_buffer].viewport.start_column as usize;
-        let start_rows = if self.buffers[self.current_buffer].lines.len()
-            > self.buffers[self.current_buffer].viewport.start_rows as usize
-        {
-            self.buffers[self.current_buffer].viewport.start_rows as usize
+        let start_column = current_viewport.start_column as usize;
+        let start_rows = if current_buffer.lines.len() > current_viewport.start_rows as usize {
+            current_viewport.start_rows as usize
         } else {
             0
         };
 
-        for (index, line) in self.buffers[self.current_buffer].lines[start_rows..]
-            .iter()
-            .enumerate()
-        {
+        for (index, line) in current_buffer.lines[start_rows..].iter().enumerate() {
             self.output.queue(cursor::MoveTo(0, index as u16))?;
             if line.len() > start_column {
                 self.output.queue(style::Print(&line[start_column..]))?;
