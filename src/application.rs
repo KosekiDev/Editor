@@ -148,17 +148,18 @@ impl Application {
             str
         };
 
-        for (index, line) in current_buffer.lines[start_rows..].iter().enumerate() {
-            if index as u16 >= current_viewport.height {
-                break;
-            }
+        for index in 0..current_viewport.height {
+            let line = if index as usize + start_rows < current_buffer.lines.len() as usize {
+                fill_line_with_spaces(
+                    &current_buffer.lines[index as usize + start_rows][start_column..],
+                    current_viewport.width as usize,
+                )
+            } else {
+                fill_line_with_spaces("", current_viewport.width as usize)
+            };
 
             self.output.queue(cursor::MoveTo(0, index as u16))?;
-            self.output.queue(style::Print(fill_line_with_spaces(
-                &line[start_column..].to_string(),
-                current_viewport.width as usize,
-            )))?;
-            self.output.queue(cursor::MoveToNextLine(1))?;
+            self.output.queue(style::Print(line))?;
         }
 
         self.output.queue(cursor::RestorePosition)?;
